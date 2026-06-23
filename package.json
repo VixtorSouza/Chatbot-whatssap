@@ -1,8 +1,25 @@
 {
   "dependencies": {
     "@ai-sdk/google-vertex": "^4.0.148",
+    "@google/genai": "^2.9.0",
+    "@hapi/boom": "^10.0.1",
     "@prisma/cli": "^3.0.0-beta.16",
+    "@prisma/client": "^7.8.0",
     "baileys": "^7.0.0-rc13",
-    "socket.io": "^4.8.3"
+    "dotenv": "^17.4.2",
+    "eslinter": "^3.2.1",
+    "lint": "^1.2.2",
+    "socket.io": "^4.8.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.6",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
+    "prettier": "^3.8.4",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
   }
 }
