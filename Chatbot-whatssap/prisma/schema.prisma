@@ -1,0 +1,48 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. Controla o estado do chat do cliente
+model ChatSession {
+  id            String   @id @default(uuid())
+  customerPhone String   @unique               // Número do WhatsApp do cliente
+  status        String   @default("ROUTER")    // ROUTER, COMPRANDO, HUMAN
+  createdAt     DateTime @default(now())
+  orders        Order[]                        // Relação: Uma sessão pode ter vários pedidos
+}
+
+// 2. Controla o seu inventário/estoque
+model Product {
+  id        String      @id @default(uuid())
+  name      String
+  sku       String      @unique               // Código único do produto (ex: CAM-PRETA-G)
+  price     Float
+  stock     Int                               // Quantidade disponível
+  items     OrderItem[]                       // Relação com os itens vendidos
+}
+
+// 3. O cabeçalho do pedido
+model Order {
+  id            String      @id @default(uuid())
+  chatSessionId String
+  chatSession   ChatSession @relation(fields: [chatSessionId], references: [id])
+  status        String      @default("PENDING") // PENDING, COMPLETED, CANCELLED
+  total         Float       @default(0.0)
+  createdAt     DateTime    @default(now())
+  items         OrderItem[]                     // Um pedido tem vários itens
+}
+
+// 4. A tabela pivô (indica qual produto e a quantidade naquele pedido)
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Float    // Salva o preço do momento da compra
+}
