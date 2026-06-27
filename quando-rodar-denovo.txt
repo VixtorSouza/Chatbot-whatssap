@@ -1,0 +1,4 @@
+# 1. Sobe o banco
+docker compose up -d
+# 2. Roda o bot
+npm run dev
