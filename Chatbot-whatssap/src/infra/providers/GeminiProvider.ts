@@ -7,11 +7,11 @@ export class GeminiProvider {
   private ai: GoogleGenAI | null = null;
 
   constructor() {
-    const apiKey = process.env.GEMINI_API_AI;
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_AI;
     if (apiKey && apiKey !== 'sua-chave-do-gemini-aqui') {
       this.ai = new GoogleGenAI({ apiKey });
     } else {
-      console.warn('[GeminiProvider] ⚠️ Chave GEMINI_API_AI ausente ou inválida. Usando fallback de regras locais.');
+      console.warn('[GeminiProvider] ⚠️ Chave GEMINI_API_KEY (ou GEMINI_API_AI) ausente ou inválida. Usando fallback de regras locais.');
     }
   }
 
@@ -118,16 +118,16 @@ Resposta (APENAS SIM ou NAO):`;
   private localFallback(messageText: string): 'SAUDACAO' | 'VER_ESTOQUE' | 'STATUS_PEDIDO' | 'HUMANO' | 'COMPRAR' {
     const text = messageText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
-    // Navegação por número (menu principal)
-    if (text === '1' || text === 'catalogo' || text === 'catalago') return 'VER_ESTOQUE';
-    if (text === '2' || text === 'comprar' || text === 'compra' || text === 'compro') return 'COMPRAR';
-    if (text === '3' || text === 'pedido' || text === 'meu pedido') return 'STATUS_PEDIDO';
-    if (text === '4') return 'HUMANO';
+    // Navegação direta por número
+    if (text === '1' || text === 'catalogo' || text === 'catalago' || text === 'produtos') return 'VER_ESTOQUE';
+    if (text === '2' || text === 'comprar' || text === 'compra' || text === 'compro' || text === 'fazer pedido') return 'COMPRAR';
+    if (text === '3' || text === 'pedido' || text === 'meu pedido' || text === 'rastreio') return 'STATUS_PEDIDO';
+    if (text === '4' || text === 'humano' || text === 'atendente') return 'HUMANO';
 
-    const palavrasEstoque = ['tem', 'estoque', 'disponivel', 'orquidea', 'planta', 'flor', 'adubo', 'produto', 'catalogo', 'denphal', 'phalaenopsis', 'cesta', 'bokashi', 'preco', 'valor', 'quanto custa'];
-    const palavrasHumano = ['humano', 'atendente', 'pessoa', 'falar com alguem', 'suporte', 'ajuda humana'];
-    const palavrasPedido = ['pedido', 'rastreio', 'rastrear', 'status', 'entrega', 'chegar', 'chega', 'onde esta', 'foi enviado'];
-    const palavrasComprar = ['comprar', 'quero a', 'quero o', 'quero comprar', 'pedir', 'encomendar', 'gostaria de comprar'];
+    const palavrasHumano = ['humano', 'atendente', 'pessoa', 'falar com alguem', 'suporte', 'ajuda humana', 'atendimento', 'contato', 'falar com atendente', 'ajuda'];
+    const palavrasComprar = ['comprar', 'quero a', 'quero o', 'quero comprar', 'pedir', 'encomendar', 'gostaria de comprar', 'fazer pedido', 'adquirir', 'cesta', 'orquidea'];
+    const palavrasPedido = ['pedido', 'rastreio', 'rastrear', 'status', 'entrega', 'chegar', 'chega', 'onde esta', 'foi enviado', 'minha compra'];
+    const palavrasEstoque = ['tem', 'estoque', 'disponivel', 'orquidea', 'planta', 'flor', 'adubo', 'produto', 'catalogo', 'denphal', 'phalaenopsis', 'cesta', 'bokashi', 'preco', 'valor', 'quanto custa', 'flores', 'mudas'];
 
     if (palavrasHumano.some((p) => text.includes(p))) return 'HUMANO';
     if (palavrasComprar.some((p) => text.includes(p))) return 'COMPRAR';
@@ -143,7 +143,8 @@ Resposta (APENAS SIM ou NAO):`;
       'bot', 'robo', 'chatbot', 'assistente', 'atendente virtual',
       'falar com o bot', 'falar com o robo', 'voltar para o bot',
       'me transfere para o bot', 'preciso do bot', 'quero o bot',
-      ' ia', 'falar com a ia', 'inteligencia artificial', 'atendimento automatico',
+      'ia', 'falar com a ia', 'inteligencia artificial', 'atendimento automatico',
+      'atendente automatico', 'robozinho'
     ];
     return termosReativar.some((t) => text.includes(t));
   }

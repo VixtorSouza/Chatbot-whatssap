@@ -7,6 +7,8 @@ import makeWASocket, {
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
+import fs from 'fs';
+import path from 'path';
 import { RouteIntentUseCase } from '../../modules/chat/RouteIntentUseCase';
 
 // Logger silencioso para não poluir o terminal com JSON bruto
@@ -42,7 +44,7 @@ export class WhatsAppProvider {
     this.sock.ev.on('creds.update', saveCreds);
 
     // Monitora o estado da conexão
-    this.sock.ev.on('connection.update', (update: any) => {
+    this.sock.ev.on('connection.update', async (update: any) => {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
@@ -52,14 +54,18 @@ export class WhatsAppProvider {
 
       if (connection === 'close') {
         const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        // Reconecta na maioria dos erros, a menos que tenhamos sido deslogados explicitamente
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 401;
 
         console.log(`[WhatsApp] Conexão encerrada (código: ${statusCode}). Reconectando: ${shouldReconnect}`);
 
         if (shouldReconnect) {
           setTimeout(() => this.start(), 3000); // Aguarda 3s antes de reconectar
         } else {
-          console.log('[WhatsApp] ⚠️ Deslogado. Delete a pasta auth_info_baileys e reinicie.');
+          console.log('[WhatsApp] ⚠️ Deslogado ou Sessão Inválida. Limpando credenciais automaticamente...');
+          this.clearAuthFolder();
+          console.log('[WhatsApp] 🔄 Reiniciando conexão para gerar novo QR Code...');
+          setTimeout(() => this.start(), 3000);
         }
       } else if (connection === 'open') {
         console.log('[WhatsApp] ✅ Conectado com sucesso! Bot pronto para receber mensagens.');
@@ -102,5 +108,18 @@ export class WhatsAppProvider {
       }
     });
 
+  }
+
+  // Remove a pasta de autenticação recursivamente
+  private clearAuthFolder() {
+    const authPath = path.resolve(process.cwd(), 'auth_info_baileys');
+    if (fs.existsSync(authPath)) {
+      try {
+        fs.rmSync(authPath, { recursive: true, force: true });
+        console.log('[WhatsApp] 🧹 Pasta auth_info_baileys removida com sucesso.');
+      } catch (err) {
+        console.error('[WhatsApp] ❌ Erro ao remover pasta auth_info_baileys:', err);
+      }
+    }
   }
 }
