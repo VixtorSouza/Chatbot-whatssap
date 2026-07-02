@@ -4,48 +4,52 @@ export class CheckStockUseCase {
   async execute(textoDoCliente: string): Promise<string> {
     const repository = new ProductRepository();
 
-    // Palavras-chave dos produtos para identificar o que o cliente quer
-    const palavrasChave: Record<string, string> = {
-      camiseta: 'Camiseta',
-      camisa: 'Camiseta',
-      bone: 'Boné',
-      boné: 'Boné',
-      moletom: 'Moletom',
-    };
+    const textoNormalizado = textoDoCliente
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
 
-    const textoNormalizado = textoDoCliente.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-    // Tenta encontrar qual produto o cliente está perguntando
-    let nomeProcurado: string | null = null;
-    for (const [palavra, nome] of Object.entries(palavrasChave)) {
-      if (textoNormalizado.includes(palavra)) {
-        nomeProcurado = nome;
-        break;
-      }
-    }
-
-    // Se mencionou um produto específico, busca só ele
-    if (nomeProcurado) {
-      const produto = await repository.findByName(nomeProcurado);
-
-      if (!produto || produto.stock === 0) {
-        return `😔 Desculpe, *${nomeProcurado}* está esgotado no momento.`;
-      }
-
-      return `✅ Temos *${produto.name}* disponível!\n📦 Estoque: ${produto.stock} unidades\n💰 Valor: R$ ${produto.price.toFixed(2)}`;
-    }
-
-    // Se não mencionou produto específico, mostra o catálogo completo
+    // Carrega todos os produtos do banco dinamicamente
     const produtos = await repository.findAllAvailable();
 
     if (produtos.length === 0) {
       return '😔 No momento não temos produtos disponíveis em estoque.';
     }
 
+    // Tenta identificar se o cliente está perguntando sobre um produto específico
+    // Suporta seleção por número (ex: "1", "2") ou por texto parcial
+    let produtoEncontrado = null;
+
+    const numberChoice = parseInt(textoNormalizado, 10);
+    if (!isNaN(numberChoice) && numberChoice >= 1 && numberChoice <= produtos.length) {
+      produtoEncontrado = produtos[numberChoice - 1];
+    }
+
+    if (!produtoEncontrado) {
+      const words = textoNormalizado.split(' ').filter((w) => w.length > 3);
+      produtoEncontrado = produtos.find((p) => {
+        const normalizedName = p.name
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '');
+        return (
+          normalizedName.includes(textoNormalizado) ||
+          words.some((word) => normalizedName.includes(word))
+        );
+      }) ?? null;
+    }
+
+    // Se encontrou um produto específico, exibe os detalhes
+    if (produtoEncontrado) {
+      return `✅ Temos *${produtoEncontrado.name}* disponível!\n📦 Estoque: ${produtoEncontrado.stock} unidades\n💰 Valor: R$ ${produtoEncontrado.price.toFixed(2)}`;
+    }
+
+    // Exibe o catálogo completo como lista numerada
     const lista = produtos
-      .map((p) => `• *${p.name}* — R$ ${p.price.toFixed(2)} (${p.stock} un.)`)
+      .map((p, i) => `• ${i + 1}. *${p.name}* — R$ ${p.price.toFixed(2)} (${p.stock} un.)`)
       .join('\n');
 
-    return `🛍️ Nosso estoque disponível:\n\n${lista}\n\nQual produto você quer saber mais?`;
+    return `🛍️ *Catálogo O Rei das Orquídeas:*\n\n${lista}\n\nQuer saber mais sobre algum produto? Digite o número ou o nome. Para comprar, diga *comprar* ou *quero comprar*.`;
   }
 }

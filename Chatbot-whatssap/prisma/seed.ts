@@ -1,8 +1,12 @@
-// prisma/seed.ts
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-const DATABASE_URL = 'postgresql://admin:mypassword@localhost:5432/chatbot_db?schema=public';
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  throw new Error('DATABASE_URL não está definida nas variáveis de ambiente!');
+}
 
 const adapter = new PrismaPg({ connectionString: DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -10,29 +14,38 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log('🌱 Iniciando o seed do estoque...');
 
-  // Deleta produtos antigos para não duplicar se rodar o script de novo
+  // Limpa dados relacionados primeiro para respeitar as FKs
+  await prisma.orderItem.deleteMany();
+  await prisma.order.deleteMany();
   await prisma.product.deleteMany();
+  console.log('🗑️  Dados antigos removidos.');
 
-  // Cria os produtos de teste no PostgreSQL
+  // Cria os produtos da floricultura O Rei das Orquídeas
   await prisma.product.createMany({
     data: [
       {
-        name: 'Camiseta Preta Oversized',
-        sku: 'CAM-PRE-G',
+        name: 'Orquídea Phalaenopsis Branca',
+        sku: 'ORQ-PHA-BR',
         price: 89.90,
-        stock: 15,
+        stock: 10,
       },
       {
-        name: 'Boné Minimalista Chumbo',
-        sku: 'BON-CHU-U',
-        price: 59.90,
+        name: 'Cesta Cascata Pink (3 hastes)',
+        sku: 'ORQ-CES-PK',
+        price: 199.90,
         stock: 5,
       },
       {
-        name: 'Moletom Canguru Off-White',
-        sku: 'MOL-OFF-M',
-        price: 199.90,
-        stock: 3,
+        name: 'Muda de Orquídea Denphal',
+        sku: 'ORQ-DEN-MU',
+        price: 39.90,
+        stock: 20,
+      },
+      {
+        name: 'Adubo Orgânico Especial Bokashi',
+        sku: 'ADU-BOK-SP',
+        price: 29.90,
+        stock: 15,
       },
     ],
   });

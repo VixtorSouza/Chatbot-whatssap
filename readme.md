@@ -1,297 +1,123 @@
-# 🤖 WhatsApp Chatbot — TypeScript + Baileys + Prisma 7
+# 🤖 WhatsApp Chatbot — TypeScript + Gemini NLP + Prisma 7 + Neon
 
-Bot de atendimento automatizado via WhatsApp, construído com **TypeScript**, arquitetura em camadas (Clean Architecture), banco de dados **PostgreSQL** via **Prisma 7** e integração com a API não-oficial do WhatsApp via **Baileys**.
+Bot de atendimento inteligente e automatizado para a floricultura **O Rei das Orquídeas**, construído com **TypeScript**, arquitetura baseada em casos de uso (Clean Architecture), banco de dados **PostgreSQL (Neon)** via **Prisma 7**, inteligência artificial com a API do **Gemini** e integração não-oficial com WhatsApp via **Baileys**.
 
 ---
 
 ## 📐 Arquitetura
 
-O projeto segue os princípios de **Clean Architecture**, separando responsabilidades em camadas bem definidas:
+O projeto segue princípios de Clean Architecture, organizando o código em casos de uso focados:
 
 ```
 src/
 ├── index.ts                        # Entrypoint da aplicação
+├── types.ts                        # Schemas Zod e tipos TypeScript centralizados
 ├── infra/
 │   ├── database/
 │   │   └── prisma.ts               # Singleton do PrismaClient com adapter PG
 │   ├── providers/
-│   │   └── WhatssapProvider.ts     # Integração com o WhatsApp (Baileys)
+│   │   ├── WhatssapProvider.ts     # Integração WhatsApp (Baileys)
+│   │   └── GeminiProvider.ts       # Brain NLP (Classificação e Reativação)
 │   └── repositories/
-│       └── ProductRepository.ts    # Acesso ao banco de dados (Prisma)
+│       ├── ChatSessionRepository.ts # Controle de sessões dos clientes
+│       ├── MessageRepository.ts     # Histórico de conversas
+│       ├── ProductRepository.ts     # Catálogo e estoque
+│       └── OrderRepository.ts       # Gestão de pedidos
 └── modules/
     ├── chat/
-    │   └── RouteIntentUseCase.ts   # Roteador de intenções do usuário
-    ├── estoque/
-    │   └── CheckStockUseCase.ts    # Caso de uso: consulta de estoque
-    └── pedidos/                    # (em desenvolvimento)
-```
-
-### Camadas
-
-| Camada | Responsabilidade |
-|---|---|
-| **Provider** | Conecta ao WhatsApp, recebe e envia mensagens |
-| **UseCase** | Contém a lógica de negócio de cada funcionalidade |
-| **Repository** | Abstrai o acesso ao banco de dados |
-| **Database** | Instância do Prisma configurada com adapter explícito |
-
----
-
-## 🔄 Fluxo de uma mensagem
-
-```mermaid
-sequenceDiagram
-    participant C as 📱 Cliente (WhatsApp)
-    participant P as WhatsAppProvider
-    participant R as RouteIntentUseCase
-    participant E as CheckStockUseCase
-    participant DB as PostgreSQL (Prisma)
-
-    C->>P: Envia mensagem de texto
-    P->>P: Filtra mensagens próprias e sem texto
-    P->>R: execute(telefone, texto)
-    R->>R: Detecta intenção por palavras-chave
-    alt Intenção: VER_ESTOQUE
-        R->>E: execute(texto)
-        E->>DB: findByName() ou findAllAvailable()
-        DB-->>E: Produto(s) encontrado(s)
-        E-->>R: Resposta formatada
-    else Intenção: FALAR_HUMANO
-        R-->>P: Mensagem de transferência
-    else Intenção: SAUDAÇÃO
-        R-->>P: Mensagem de boas-vindas
-    end
-    P->>C: sendMessage(resposta)
+    │   └── RouteIntentUseCase.ts   # Orquestrador de fluxo por máquina de estados
+    └── estoque/
+        ├── CheckStockUseCase.ts    # Consulta e listagem dinâmica de estoque
+        ├── CreateOrderUseCase.ts   # Validação de estoque e criação de pedidos
+        └── ProcessCheckoutUseCase.ts # Máquina de estados do fluxo de compra
 ```
 
 ---
 
-## 🔄 Fluxo de dados (Infraestrutura)
+## ⚙️ Máquina de Estados de Atendimento
 
-```mermaid
-graph TD
-    A[npm run dev] --> B[index.ts]
-    B --> C[WhatsAppProvider.start]
-    C --> D[Baileys: makeWASocket]
-    D --> E{QR Code?}
-    E -->|Não logado| F[Imprime QR no terminal]
-    F --> G[Usuário escaneia]
-    G --> H[✅ Conectado ao WhatsApp]
-    E -->|Já autenticado| H
-    H --> I[Escuta: messages.upsert]
-    I --> J[RouteIntentUseCase]
-    J --> K[Repositório → Prisma → PostgreSQL]
-    K --> L[Resposta formatada]
-    L --> M[sock.sendMessage]
-```
+O chatbot controla a experiência do usuário com base no status de sua sessão no banco de dados:
+
+1. **`ROUTER` (Roteador NLP)**:
+   - Se o usuário envia `1`, `2`, `3` ou `4`, o bot intercepta localmente sem fazer requisições na API do Gemini.
+   - Caso contrário, envia o texto ao Gemini NLP para classificar a intenção (`VER_ESTOQUE`, `COMPRAR`, `STATUS_PEDIDO`, `HUMANO` ou `SAUDACAO`).
+   - Possui fallback resiliente local para lidar com o limite da cota gratuita da API do Gemini (429).
+2. **`COMPRANDO` (Checkout em 4 etapas)**:
+   - **`AGUARDANDO_PRODUTO`**: Usuário digita ou seleciona o número do item no catálogo.
+   - **`AGUARDANDO_ENTREGA`**: Escolha entre `entrega` ou `retirada` (com NLP para variações linguísticas).
+   - **`AGUARDANDO_ENDERECO`**: Coleta de endereço (se selecionado entrega).
+   - **`AGUARDANDO_PAGAMENTO`**: Escolha do meio de pagamento (`PIX`, `Dinheiro` ou `Cartão`) e envio de resumo final com dedução imediata no estoque.
+3. **`HUMAN` (Transbordo Humano)**:
+   - O chatbot para de responder e entra em modo silencioso.
+   - O Gemini NLP monitora as mensagens buscando intenções de reativação (ex: "quero o robô", "voltar para IA"), trazendo o status da sessão de volta para `ROUTER` de forma natural.
 
 ---
 
-## 🗄️ Modelo de Dados
+## 🗄️ Modelo de Dados (PostgreSQL / Neon)
 
-```mermaid
-erDiagram
-    ChatSession {
-        string id PK
-        string customerPhone UK
-        string status
-        datetime createdAt
-    }
-    Product {
-        string id PK
-        string name
-        string sku UK
-        float price
-        int stock
-    }
-    Order {
-        string id PK
-        string chatSessionId FK
-        string status
-        float total
-        datetime createdAt
-    }
-    OrderItem {
-        string id PK
-        string orderId FK
-        string productId FK
-        int quantity
-        float price
-    }
+O banco de dados PostgreSQL está normalizado na terceira forma normal (**3FN**), utilizando as seguintes entidades:
 
-    ChatSession ||--o{ Order : "tem"
-    Order ||--o{ OrderItem : "contém"
-    Product ||--o{ OrderItem : "referenciado em"
-```
+*   **`ChatSession`**: Mantém o estado da conversa, o telefone, a última mensagem recebida (`lastSeenAt`) e o nome do contato do WhatsApp (`customerName`) capturado de forma passiva.
+*   **`Message`**: Histórico completo de mensagens recebidas (`USER`) e enviadas (`BOT`).
+*   **`Product`**: Tabela de inventário com SKU única, preço e quantidade em estoque.
+*   **`Order`**: Registro de compras com tipo de entrega, endereço e valor total.
+*   **`OrderItem`**: Tabela de pivô (N:M) que armazena a quantidade e o preço unitário pago (snapshot do preço no momento da compra).
 
 ---
 
 ## 🛠️ Stack Tecnológica
 
-| Tecnologia | Versão | Função |
-|---|---|---|
-| **TypeScript** | ^6.0 | Linguagem principal |
-| **tsx** | ^4.22 | Executa TypeScript diretamente sem build |
-| **Baileys** | 6.17.16 | SDK WhatsApp Multi-Device (protocolo não-oficial) |
-| **Prisma** | ^7.8 | ORM + migrations + geração de tipos |
-| **@prisma/adapter-pg** | ^7.8 | Adapter explícito PostgreSQL para Prisma 7 |
-| **pg** | ^8.22 | Driver nativo do PostgreSQL |
-| **dotenv** | ^17 | Carregamento de variáveis de ambiente |
-| **pino** | interno | Logger estruturado (do Baileys) |
-| **qrcode-terminal** | latest | Renderiza o QR Code no terminal |
-| **@hapi/boom** | ^10 | Tipagem de erros HTTP estruturados |
-| **Docker + PostgreSQL 15** | — | Banco de dados em container |
+*   **TypeScript + tsx**: Execução direta sem etapa de build.
+*   **Baileys**: SDK WhatsApp Multi-Device (WebSocket).
+*   **Gemini API (@google/genai)**: Processamento de Linguagem Natural (NLP) para intenções e reativação.
+*   **Prisma 7 + @prisma/adapter-pg**: ORM de última geração com drivers PostgreSQL nativos.
+*   **Zod**: Validação de runtime e tipagem forte ponta a ponta.
+*   **Vitest**: Suite de testes rápidos e mockagem de serviços.
 
 ---
 
-## 📦 Pré-requisitos
+## 🚀 Como Rodar o Projeto
 
-- **Node.js** >= 20
-- **Docker** (para o PostgreSQL)
-- Conta no **WhatsApp** para escanear o QR Code
-
----
-
-## 🚀 Como rodar
-
-### 1. Clone o repositório
-
-```bash
-git clone https://github.com/VixtorSouza/Chatbot-whatssap.git
-cd Chatbot-whatssap
-```
-
-### 2. Instale as dependências
-
+### 1. Instalar dependências
 ```bash
 npm install
 ```
 
-### 3. Configure o ambiente
-
-Crie um arquivo `.env` na raiz:
-
+### 2. Configurar o arquivo `.env`
+Crie um arquivo `.env` na raiz do projeto com as chaves:
 ```env
-DATABASE_URL="postgresql://admin:mypassword@localhost:5432/chatbot_db?schema=public"
+DATABASE_URL="sua_connection_string_postgresql_do_neon"
+GEMINI_API_KEY="sua_chave_gemini_api"
 ```
 
-### 4. Suba o banco de dados
-
+### 3. Sincronizar banco de dados e rodar o Seed
 ```bash
-docker compose up -d
+# Sincroniza o schema e aplica migrations
+npx prisma migrate dev --schema Chatbot-whatssap/prisma/schema.prisma
+
+# Popula o banco com orquídeas e adubos
+npx tsx Chatbot-whatssap/src/seed.ts
 ```
 
-### 5. Gere o Prisma Client e rode as migrations
-
-```bash
-# Gera os tipos do Prisma
-npx prisma generate --config Chatbot-whatssap/prisma.config.ts
-
-# Aplica as migrations no banco
-npx prisma migrate dev --config Chatbot-whatssap/prisma.config.ts
-
-# Popula o banco com dados iniciais (seed)
-npm run seed
-```
-
-### 6. Inicie o bot
-
+### 4. Iniciar o chatbot
 ```bash
 npm run dev
 ```
-
-Um **QR Code** aparecerá no terminal. Escaneie com o seu WhatsApp (**Configurações → Dispositivos conectados → Conectar dispositivo**).
+Escaneie o QR Code exibido no terminal utilizando a opção "Aparelhos conectados" do seu aplicativo do WhatsApp.
 
 ---
 
-## 📜 Scripts disponíveis
+## 🧪 Testes E2E (Vitest)
 
+O projeto conta com uma suite completa de testes integrados utilizando **Vitest** e mock de API. Os testes validam:
+- Saudação a novos clientes
+- Catálogo e busca dinâmica de produtos
+- Fluxo de compra completo (tanto Retirada + PIX quanto Entrega + Dinheiro)
+- Cancelamento de fluxo
+- Detecção e saudação de cliente de retorno (>4h de ausência)
+- Transbordo e reativação NLP do bot
+
+Para executar os testes:
 ```bash
-npm run dev      # Inicia o bot em modo desenvolvimento
-npm run seed     # Executa o seed no banco de dados
-npm run migrate  # Roda as migrations do Prisma
+npm run test:e2e
 ```
-
----
-
-## ⚙️ Configuração do Prisma 7
-
-O Prisma 7 introduziu uma mudança importante: a URL de conexão não fica mais no `schema.prisma` e sim em um arquivo `prisma.config.ts`:
-
-```ts
-// prisma.config.ts
-import { defineConfig } from 'prisma/config';
-
-export default defineConfig({
-  datasource: {
-    url: process.env.DATABASE_URL,
-  },
-});
-```
-
-E o `PrismaClient` agora exige um **adapter explícito** para conectar ao banco:
-
-```ts
-import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-export const prisma = new PrismaClient({ adapter });
-```
-
----
-
-## 🔌 Como o Baileys funciona
-
-O **Baileys** é uma biblioteca que implementa o protocolo **WhatsApp Multi-Device** via WebSocket, sem necessidade de um celular conectado continuamente. Na primeira execução:
-
-1. Gera um **QR Code** no terminal
-2. Após o scan, salva as credenciais em `auth_info_baileys/` (pasta local, no `.gitignore`)
-3. Nas próximas execuções, reconecta automaticamente sem QR
-
-> ⚠️ O código `440` nos logs indica que o WhatsApp detectou múltiplas conexões abertas (ex: celular + bot ao mesmo tempo) e força uma reconexão. O bot trata isso automaticamente.
-
----
-
-## 📁 Estrutura completa do projeto
-
-```
-chatbot-whatssap/
-├── .env                          # Variáveis de ambiente (não commitado)
-├── .gitignore
-├── docker-compose.yml            # PostgreSQL em container
-├── package.json                  # Dependências e scripts
-├── prisma.config.ts              # Configuração global do Prisma 7 (raiz)
-├── auth_info_baileys/            # Credenciais WhatsApp (não commitado)
-└── Chatbot-whatssap/
-    ├── prisma/
-    │   ├── schema.prisma         # Modelos do banco de dados
-    │   ├── seed.ts               # Script de seed
-    │   └── prisma.config.ts      # Config do Prisma para este subprojeto
-    └── src/
-        ├── index.ts
-        ├── infra/
-        │   ├── database/prisma.ts
-        │   ├── providers/WhatssapProvider.ts
-        │   └── repositories/ProductRepository.ts
-        └── modules/
-            ├── chat/RouteIntentUseCase.ts
-            ├── estoque/CheckStockUseCase.ts
-            └── pedidos/              # (em desenvolvimento)
-```
-
----
-
-## 🔮 Próximas evoluções
-
-- [ ] Integração com IA (Gemini / GPT) para detecção de intenção via NLP
-- [ ] Módulo de pedidos com fluxo de carrinho via WhatsApp
-- [ ] Gerenciamento de sessão de conversa com máquina de estados
-- [ ] Painel administrativo web para visualização de pedidos e estoque
-- [ ] Testes unitários e de integração
-
----
-
-## 📄 Licença
-
-MIT

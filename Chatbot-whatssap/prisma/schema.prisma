@@ -8,11 +8,26 @@ generator client {
 
 // 1. Controla o estado do chat do cliente
 model ChatSession {
-  id            String   @id @default(uuid())
-  customerPhone String   @unique               // Número do WhatsApp do cliente
-  status        String   @default("ROUTER")    // ROUTER, COMPRANDO, HUMAN
-  createdAt     DateTime @default(now())
-  orders        Order[]                        // Relação: Uma sessão pode ter vários pedidos
+  id             String    @id @default(uuid())
+  customerPhone  String    @unique               // Número do WhatsApp do cliente
+  customerName   String?                         // Nome capturado do pushName do WhatsApp
+  status         String    @default("ROUTER")    // ROUTER, COMPRANDO, HUMAN
+  checkoutStep   String    @default("NONE")      // NONE, AGUARDANDO_PRODUTO, AGUARDANDO_ENTREGA, AGUARDANDO_ENDERECO, AGUARDANDO_PAGAMENTO
+  currentOrderId String?                         // Armazena o ID do pedido ativo durante a compra
+  lastSeenAt     DateTime  @default(now())       // Última vez que o cliente enviou mensagem
+  createdAt      DateTime  @default(now())
+  orders         Order[]                         // Relação: Uma sessão pode ter vários pedidos
+  messages       Message[]                       // Histórico de mensagens
+}
+
+// 1.1 Histórico de mensagens da conversa
+model Message {
+  id            String      @id @default(uuid())
+  chatSessionId String
+  chatSession   ChatSession @relation(fields: [chatSessionId], references: [id])
+  sender        String      // "USER" ou "BOT"
+  text          String
+  createdAt     DateTime    @default(now()) // Data/hora do recebimento/envio
 }
 
 // 2. Controla o seu inventário/estoque
@@ -32,6 +47,8 @@ model Order {
   chatSession   ChatSession @relation(fields: [chatSessionId], references: [id])
   status        String      @default("PENDING") // PENDING, COMPLETED, CANCELLED
   total         Float       @default(0.0)
+  deliveryType  String?                         // RETIRADA ou ENTREGA
+  deliveryAddress String?                       // Endereço de entrega
   createdAt     DateTime    @default(now())
   items         OrderItem[]                     // Um pedido tem vários itens
 }

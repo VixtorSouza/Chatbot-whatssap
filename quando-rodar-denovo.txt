@@ -1,4 +1,18 @@
-# 1. Sobe o banco
-docker compose up -d
-# 2. Roda o bot
-npm run dev
+COMO RODAR O PROJETO CHATBOT WHATSAPP:
+
+1. Atualizar credenciais:
+   Garantir que as chaves DATABASE_URL (Neon PostgreSQL) e GEMINI_API_KEY (Google AI Studio) estejam corretas no arquivo .env da raiz.
+
+2. Sincronizar e migrar o banco de dados (Prisma):
+   npx prisma migrate dev --schema Chatbot-whatssap/prisma/schema.prisma
+
+3. Executar o seed de orquídeas e adubos no banco de dados:
+   npx tsx Chatbot-whatssap/src/seed.ts
+
+4. Iniciar os testes automatizados E2E (Vitest):
+   npm run test:e2e
+
+5. Iniciar o bot no modo desenvolvimento:
+   npm run dev
+
+6. Escanear o QR Code no terminal com o celular que atuará como bot.

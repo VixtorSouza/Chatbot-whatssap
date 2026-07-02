@@ -77,16 +77,23 @@ export class WhatsAppProvider {
         msg.message.extendedTextMessage?.text ||
         '';
 
+      // Nome do contato no WhatsApp (pushName) — capturado automaticamente pelo Baileys
+      const pushName: string | undefined = msg.pushName || undefined;
+
       if (!text.trim()) return;
 
-      console.log(`[WhatsApp] 📩 Mensagem de ${from}: "${text}"`);
+      console.log(`[WhatsApp] 📩 Mensagem de ${from} (${pushName ?? 'sem nome'}): "${text}"`);
 
       try {
         const routeIntentUseCase = new RouteIntentUseCase();
-        const resposta = await routeIntentUseCase.execute(from, text);
+        const resposta = await routeIntentUseCase.execute(from, text, pushName);
 
-        await this.sock.sendMessage(from, { text: resposta });
-        console.log(`[WhatsApp] ✉️ Resposta enviada para ${from}`);
+        if (resposta) {
+          await this.sock.sendMessage(from, { text: resposta });
+          console.log(`[WhatsApp] ✉️ Resposta enviada para ${from}`);
+        } else {
+          console.log(`[WhatsApp] 🤫 Mensagem de ${from} ignorada (atendimento humano ativo)`);
+        }
       } catch (err) {
         console.error('[WhatsApp] ❌ Erro ao processar mensagem:', err);
         await this.sock.sendMessage(from, {
@@ -94,5 +101,6 @@ export class WhatsAppProvider {
         });
       }
     });
+
   }
 }
